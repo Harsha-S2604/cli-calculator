@@ -77,7 +77,6 @@ fn main() {
         let input = sanitize_input(&mut input);
         let tokens = tokenize_input(input);
 
-        println!("{:#?}", tokens);
 
         for token in tokens {
             if token == ")" {
@@ -162,8 +161,28 @@ fn main() {
                 }
             }
         }
+
+        // check for reamining nums
+        while let Some(num) = num_stack.last() {
+            if num_stack.len() == 1 {
+                break;
+            }
+
+            let rhs = num_stack.pop();
+            let lhs = num_stack.pop();
+
+            match(lhs, rhs) {
+                (Some(a), Some(b)) => {
+                    let result = apply_op(a, b, "+");
+                    num_stack.push(result);
+                },
+                _ => {
+                    break;
+                }
+
+            }
+        }
     
-        println!("{:#?}", num_stack);
         if num_stack.len() == 1 {
             println!("{0}", num_stack[0]);
         } else {

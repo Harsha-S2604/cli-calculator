@@ -21,24 +21,29 @@ fn divide(a: f64, b: f64) -> f64 {
     a / b
 }
 
-fn get_result(a: f64, b: f64, ops: &str) -> f64 {
+fn power(num: f64, power: f64) -> f64 {
+    num.powf(power)
+}
+
+fn apply_op(a: f64, b: f64, ops: &str) -> f64 {
     match ops {
         "+" => add(a, b),
         "-" => sub(a, b),
         "*" => multiply(a, b),
         "/" => divide(a, b),
+        "^" => power(a, b),
         &_ => todo!(),
     }
 }
 
 static OPS_PREC: Lazy<HashMap<&'static str, u8>> = Lazy::new(|| {
     let mut m = HashMap::new();
-    m.insert("+", 0);
-    m.insert("-", 0);
-    m.insert("*", 1);
-    m.insert("/", 1);
-    m.insert("^", 2);
-    m.insert("(", 3);
+    m.insert("+", 1);
+    m.insert("-", 1);
+    m.insert("*", 2);
+    m.insert("/", 2);
+    m.insert("^", 3);
+    m.insert("(", 4);
     m
 });
 
@@ -47,7 +52,7 @@ fn sanitize_input(input: &mut String) -> &str {
 }
 
 fn tokenize_input(input: &str) -> Vec<&str> {
-    let re = Regex::new(r"([+-]?\d+(\.\d+)?|[+\-*\/%()^])").unwrap();
+    let re = Regex::new(r"-?\d+(?:\.\d+)?|[+\-*/%()^]|[^+\-*/%()^\s]+").unwrap();
     let tokenized: Vec<&str> = re
         .captures_iter(input)
         .map(|cap| cap.get(0).unwrap().as_str())
@@ -58,7 +63,7 @@ fn tokenize_input(input: &str) -> Vec<&str> {
 fn main() {
     println!("CLI CALCULATOR");
 
-    loop {
+    'outer: loop {
         print!(">>> ");
         let mut ops_stack: Vec<String> = Vec::new();
         let mut num_stack: Vec<f64> = Vec::new();
@@ -73,25 +78,42 @@ fn main() {
         let tokens = tokenize_input(input);
 
         for token in tokens {
-            if OPS_PREC.contains_key(token) {
-                if ops_stack.len() == 0 {
+            if token == ")" {
+                println!("Closing bracket");
+            } else if OPS_PREC.contains_key(token) {
+                if ops_stack.len() == 0 || token == "(" {
                     ops_stack.push(token.to_string());
                 } else {
-                    let symbol_prec = OPS_PREC.get(token).unwrap();
-                    let mut last_op = &ops_stack[ops_stack.len() - 1];
-                    let mut stack_prec = OPS_PREC.get(last_op.as_str()).unwrap();
+                    let mut top_stack = &ops_stack[ops_stack.len() - 1];
+                    let mut stack_prec = OPS_PREC.get(top_stack.as_str()).unwrap_or(&0);
+                    let curr_prec = OPS_PREC.get(token).unwrap_or(&0);
 
-                    let mut idx = ops_stack.len() - 1;
-                    while idx >= 0 && symbol_prec <= stack_prec {
-                        let curr_op = ops_stack.pop().unwrap();
-                        let first_num = num_stack.pop().unwrap();
-                        let second_num = num_stack.pop().unwrap();
-                        let result = get_result(second_num, first_num, &curr_op);
-                        num_stack.push(result);
+                    if *stack_prec == 0 || *curr_prec == 0 {
+                        eprintln!("(ERROR):: Invalid symbol");
+                        continue 'outer;
+                    }
 
-                        idx -= 1;
-                        last_op = &ops_stack[idx];
-                        stack_prec = OPS_PREC.get(last_op.as_str()).unwrap();
+                    while let Some(op) = ops_stack.last() {
+                        stack_prec = OPS_PREC.get(op.as_str()).unwrap_or(&0);
+                        
+                        if stack_prec < curr_prec {
+                            break;
+                        }
+
+                        let rhs = num_stack.pop();
+                        let lhs = num_stack.pop();
+
+                        match (lhs, rhs) {
+                            (Some(a), Some(b)) => {
+                                let operator = ops_stack.pop().unwrap();
+                                let result = apply_op(a, b, &operator);
+                                num_stack.push(result);
+                            }
+                            _ => {
+                                eprintln!("(ERROR):: Syntax Error");
+                                continue 'outer;
+                            }
+                        }
                     }
 
                     ops_stack.push(token.to_string());
@@ -99,23 +121,33 @@ fn main() {
             } else if let Ok(num) = token.parse::<f64>() {
                 num_stack.push(num);
             } else {
-                println!("(ERROR):: Syntax error");
-                continue;
+                eprintln!("(ERROR):: Syntax Error");
+                continue 'outer;
             }
         }
 
-        while ops_stack.len() != 0 {
-            let op = ops_stack.pop().unwrap();
-            let first_num = num_stack.pop().unwrap();
-            let second_num = num_stack.pop().unwrap();
+        // do remaining ops
+        while let Some(op) = ops_stack.pop() {
+            let rhs = num_stack.pop();
+            let lhs = num_stack.pop();
 
-            let result = get_result(second_num, first_num, &op);
-            num_stack.push(result);
+            match (lhs, rhs) {
+                (Some(a), Some(b)) => {
+                    let result = apply_op(a, b, &op);
+                    num_stack.push(result);
+                },
+
+                _ => {
+                    eprintln!("(ERROR):: Syntax Error)");
+                    continue 'outer;
+                }
+            }
         }
-        
+
         if num_stack.len() == 1 {
             println!("{0}", num_stack[0]);
+        } else {
+            eprintln!("(ERROR):: Syntax Error)");
         }
-
     }
 }

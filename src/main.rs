@@ -77,9 +77,28 @@ fn main() {
         let input = sanitize_input(&mut input);
         let tokens = tokenize_input(input);
 
+        println!("{:#?}", tokens);
+
         for token in tokens {
             if token == ")" {
-                println!("Closing bracket");
+                while let Some(op) = ops_stack.pop() {
+                    if op == "(" {
+                        break;
+                    }
+
+                    let rhs = num_stack.pop();
+                    let lhs = num_stack.pop();
+
+                    match (lhs, rhs) {
+                        (Some(a), Some(b)) => {
+                            let result = apply_op(a, b, &op);
+                            num_stack.push(result);
+                        },
+                        _ => {
+                            eprintln!("(ERROR):: Syntax Error");
+                        }
+                    }
+                }
             } else if OPS_PREC.contains_key(token) {
                 if ops_stack.len() == 0 || token == "(" {
                     ops_stack.push(token.to_string());
@@ -96,7 +115,7 @@ fn main() {
                     while let Some(op) = ops_stack.last() {
                         stack_prec = OPS_PREC.get(op.as_str()).unwrap_or(&0);
                         
-                        if stack_prec < curr_prec {
+                        if stack_prec < curr_prec || op == "(" {
                             break;
                         }
 
@@ -138,12 +157,13 @@ fn main() {
                 },
 
                 _ => {
-                    eprintln!("(ERROR):: Syntax Error)");
+                    eprintln!("(ERROR):: Syntax Error");
                     continue 'outer;
                 }
             }
         }
-
+    
+        println!("{:#?}", num_stack);
         if num_stack.len() == 1 {
             println!("{0}", num_stack[0]);
         } else {
